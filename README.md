@@ -37,7 +37,7 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/itz-baig/car-damage-detection
 cd dent_detection
 ```
 
