@@ -37,8 +37,8 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/itz-baig/car-damage-detection
-cd dent_detection
+git clone https://github.com/itz-baig/car-damage-detection.git
+cd car-damage-detection
 ```
 
 ### 2. Install Dependencies
