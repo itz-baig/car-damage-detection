@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DentScan AI — Car Damage Detection</title>
+  <meta name="description" content="AI-powered car dent and scratch detection with repair cost estimation using computer vision." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0d14;
+      --surface:   #111621;
+      --card:      #161c2d;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #f97316;
+      --accent2:   #06b6d4;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #eab308;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .logo-icon {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--accent), #fb923c);
+      border-radius: 10px;
+      display: grid; place-items: center; font-size: 1.4rem;
+      box-shadow: 0 0 20px rgba(249,115,22,0.4);
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; }
+    header p  { font-size: .8rem; color: var(--muted); }
+    /* ── Legend pill ── */
+    .legend { display:flex; gap:.75rem; margin-left:auto; margin-right:.75rem; font-size:.72rem; }
+    .legend span { display:flex; align-items:center; gap:.3rem; color:var(--muted); }
+    .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; }
+    .badge {
+      margin-left: auto;
+      font-size: .7rem; font-weight: 600; letter-spacing: .05em;
+      background: rgba(6,182,212,.15); color: var(--accent2);
+      border: 1px solid rgba(6,182,212,.3);
+      border-radius: 99px; padding: .25rem .75rem;
+    }
+
+    /* ── Layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media(max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .card-title {
+      font-size: .75rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
+    }
+
+    /* ── Upload Zone ── */
+    .drop-zone {
+      border: 2px dashed rgba(249,115,22,.35);
+      border-radius: var(--radius);
+      background: rgba(249,115,22,.04);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all .25s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(249,115,22,.09);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(249,115,22,.15);
+    }
+    .drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width:100%; height:100%;
+    }
+    .drop-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+    .drop-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: .4rem; }
+    .drop-zone p  { font-size: .82rem; color: var(--muted); }
+    .file-list { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
+    .file-chip {
+      background: rgba(249,115,22,.15); border: 1px solid rgba(249,115,22,.3);
+      color: var(--accent); font-size: .75rem; border-radius: 99px;
+      padding: .2rem .7rem; display: flex; align-items: center; gap: .4rem;
+    }
+    .file-chip button {
+      background: none; border: none; color: inherit; cursor: pointer;
+      font-size: .9rem; line-height: 1; padding: 0;
+    }
+
+    /* ── Mode Toggle ── */
+    .mode-toggle {
+      display: flex; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; margin-bottom: 1.25rem;
+    }
+    .mode-toggle button {
+      flex: 1; padding: .6rem .5rem; background: none; border: none;
+      color: var(--muted); font-size: .82rem; font-weight: 500; cursor: pointer;
+      transition: all .2s;
+    }
+    .mode-toggle button.active {
+      background: var(--accent); color: #fff; font-weight: 600;
+    }
+
+    /* ── Analyze Button ── */
+    #analyzeBtn {
+      width: 100%; margin-top: 1.25rem; padding: .85rem;
+      background: linear-gradient(135deg, var(--accent), #fb923c);
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: all .25s;
+      box-shadow: 0 4px 20px rgba(249,115,22,.35);
+    }
+    #analyzeBtn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(249,115,22,.5);
+    }
+    #analyzeBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 22px; height: 22px; border: 3px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .7s linear infinite; display: inline-block;
+      vertical-align: middle; margin-right: .5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Preview ── */
+    #previewWrap { display: none; }
+    #previewImg {
+      width: 100%; border-radius: 10px; object-fit: contain;
+      max-height: 350px; background: #000;
+    }
+    .preview-label {
+      font-size: .72rem; color: var(--muted); margin-top: .5rem; text-align: center;
+    }
+
+    /* ── Results ── */
+    #results { display: none; margin-top: 2rem; }
+
+    .stat-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media(max-width:600px) { .stat-row { grid-template-columns: repeat(2,1fr); } }
+
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.1rem;
+      text-align: center;
+    }
+    .stat-card .val {
+      font-size: 1.6rem; font-weight: 800; margin-bottom: .2rem;
+    }
+    .stat-card .lbl { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* ── Severity Bar ── */
+    .sev-bar-wrap { margin-bottom: 1.5rem; }
+    .sev-bar-track {
+      height: 10px; background: rgba(255,255,255,.06);
+      border-radius: 99px; overflow: hidden; margin-top: .5rem;
+    }
+    .sev-bar-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+    }
+    .sev-labels {
+      display: flex; justify-content: space-between;
+      font-size: .7rem; color: var(--muted); margin-top: .3rem;
+    }
+
+    /* ── Annotated Image ── */
+    #annotatedImg {
+      width: 100%; border-radius: 10px; object-fit: contain;
+      max-height: 420px; background: #000;
+    }
+
+    /* ── Dent Cards ── */
+    .dent-cards { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.25rem; }
+    .dent-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.1rem 1.25rem;
+      border-left: 4px solid var(--accent);
+    }
+    .dent-card.scratch {
+      border-left-color: var(--accent2);
+    }
+    .dent-card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: .75rem;
+    }
+    .dent-id { font-size: .85rem; font-weight: 700; color: var(--accent); }
+    .dent-card.scratch .dent-id { color: var(--accent2); }
+    .dent-type { font-size: .78rem; color: var(--muted); }
+    .dent-badge {
+      font-size: .7rem; font-weight: 600; border-radius: 99px;
+      padding: .2rem .7rem; border: 1px solid;
+    }
+    .badge-pdr     { background: rgba(34,197,94,.1);  color: var(--green);   border-color: rgba(34,197,94,.3);  }
+    .badge-std     { background: rgba(234,179,8,.1);   color: var(--yellow);  border-color: rgba(234,179,8,.3);  }
+    .badge-full    { background: rgba(239,68,68,.1);   color: var(--red);     border-color: rgba(239,68,68,.3);  }
+    .badge-scratch { background: rgba(6,182,212,.1);   color: var(--accent2); border-color: rgba(6,182,212,.3);  }
+
+    .dent-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: .4rem .75rem; font-size: .8rem;
+    }
+    .dent-kv { display: flex; gap: .4rem; }
+    .dent-kv span:first-child { color: var(--muted); }
+    .dent-kv span:last-child  { font-weight: 500; }
+
+    .bool-true  { color: var(--red);   }
+    .bool-false { color: var(--green); }
+
+    /* ── No Dents ── */
+    .no-dent {
+      text-align: center; padding: 2.5rem;
+      color: var(--green); font-size: 1.1rem; font-weight: 600;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3);
+      border-radius: 10px; padding: 1rem 1.25rem;
+      color: var(--red); font-size: .85rem; margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🔍</div>
+  <div>
+    <h1>DentScan AI</h1>
+    <p>Car Damage Detection &amp; Repair Estimator</p>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--accent)"></i>Dent</span>
+    <span><i style="background:var(--accent2)"></i>Scratch</span>
+  </div>
+  <span class="badge" id="modeBadge">Loading…</span>
+</header>
+
+<main>
+  <div class="grid">
+
+    <!-- ── Left Panel: Upload ── -->
+    <div>
+      <div class="card">
+        <p class="card-title">Upload Mode</p>
+        <div class="mode-toggle">
+          <button class="active" id="btnSingle" onclick="setMode('single')">📷 Single Photo</button>
+          <button id="btnMulti" onclick="setMode('multi')">🔄 Multi-Angle (up to 6 photos)</button>
+        </div>
+
+        <div class="control-panel">
+        <div class="input-group">
+          <label for="fileInput" class="custom-file-upload">
+            <span id="uploadIcon">📁</span> <span id="fileCountText">Select Car Photos</span>
+          </label>
+          <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
+        </div>
+
+        <div class="sensitivity-wrap" style="margin-top: 1.5rem; padding: 0 0.5rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem;">
+            <span>Sensitivity</span>
+            <span id="sensVal">75%</span>
+          </div>
+          <input type="range" id="sensSlider" min="10" max="100" value="75" style="width: 100%; accent-color: var(--accent);">
+          <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--muted); margin-top: 0.2rem;">
+            <span>Strict (Less False Positives)</span>
+            <span>Aggressive (Find More)</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button id="analyzeBtn" class="btn primary" disabled>Analyze Damage</button>
+          <button id="clearBtn" class="btn secondary">Clear</button>
+        </div>
+      </div>
+
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <div class="drop-icon">📁</div>
+          <h3>Drag &amp; drop your photo here</h3>
+          <p id="dropHint">or click to browse — JPG, PNG, WEBP</p>
+          <div class="file-list" id="fileList"></div>
+        </div>
+
+        <div id="errorBox"></div>
+      </div>
+
+      <!-- Preview -->
+      <div class="card" id="previewWrap" style="margin-top:1.25rem;">
+        <p class="card-title">Image Preview</p>
+        <img id="previewImg" src="" alt="Preview" />
+        <p class="preview-label" id="previewLabel"></p>
+      </div>
+    </div>
+
+    <!-- ── Right Panel: Results ── -->
+    <div>
+      <div id="results">
+
+        <!-- Stats Row -->
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="val" id="statDents" style="color:var(--accent)">—</div>
+            <div class="lbl">Dents</div>
+          </div>
+          <div class="stat-card">
+            <div class="val" id="statScratches" style="color:var(--accent2)">—</div>
+            <div class="lbl">Scratches</div>
+          </div>
+          <div class="stat-card">
+            <div class="val" id="statSev" style="font-size:1.1rem;">—</div>
+            <div class="lbl">Severity</div>
+          </div>
+          <div class="stat-card">
+            <div class="val" id="statCost" style="font-size:.9rem;">—</div>
+            <div class="lbl">Est. Cost</div>
+          </div>
+        </div>
+
+        <!-- Severity Bar -->
+        <div class="card sev-bar-wrap">
+          <p class="card-title">Severity Score &nbsp;<span id="sevScore" style="color:var(--accent);font-size:.85rem;"></span></p>
+          <div class="sev-bar-track">
+            <div class="sev-bar-fill" id="sevBar" style="width:0%"></div>
+          </div>
+          <div class="sev-labels"><span>0 — None</span><span>50 — Moderate</span><span>100 — Critical</span></div>
+        </div>
+
+        <!-- Annotated Image -->
+        <div class="card" style="margin-bottom:1.25rem;">
+          <p class="card-title">AI Annotated Result
+            &nbsp;<span style="font-size:.7rem;color:var(--muted);">🟩 Dent &nbsp; 🟦 Scratch</span>
+          </p>
+          <img id="annotatedImg" src="" alt="Annotated" />
+        </div>
+
+        <!-- Damage Details -->
+        <div class="card">
+          <p class="card-title">Damage Breakdown</p>
+          <div class="dent-cards" id="dentCards"></div>
+        </div>
+
+      </div>
+
+      <!-- Placeholder before analysis -->
+      <div class="card" id="placeholder" style="text-align:center; padding:3rem 1.5rem;">
+        <div style="font-size:3rem; margin-bottom:1rem;">🚗</div>
+        <p style="font-weight:600; margin-bottom:.5rem;">No Analysis Yet</p>
+        <p style="font-size:.85rem; color:var(--muted);">Upload a car photo and click <strong>Analyze Damage</strong> to detect dents &amp; scratches.</p>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  const API = 'http://127.0.0.1:8001';
+  let uploadMode = 'single';
+  let selectedFiles = [];
+
+  // ── Fetch detection mode on load ──────────────────────────────────────────
+  fetch(`${API}/v2/health`)
+    .then(r => r.json())
+    .then(d => {
+      const badge = document.getElementById('modeBadge');
+      if (d.detection_mode === 'trained') {
+        badge.textContent = '🟢 Trained Model Active';
+        badge.style.background = 'rgba(34,197,94,.15)';
+        badge.style.color = '#22c55e';
+        badge.style.borderColor = 'rgba(34,197,94,.3)';
+      } else {
+        badge.textContent = '🟡 Fallback CV Mode';
+        badge.style.background = 'rgba(234,179,8,.15)';
+        badge.style.color = '#eab308';
+        badge.style.borderColor = 'rgba(234,179,8,.3)';
+      }
+    })
+    .catch(() => {
+      document.getElementById('modeBadge').textContent = '🔴 API Offline';
+    });
+
+  // ── Mode Toggle ───────────────────────────────────────────────────────────
+  function setMode(m) {
+    uploadMode = m;
+    document.getElementById('btnSingle').classList.toggle('active', m === 'single');
+    document.getElementById('btnMulti').classList.toggle('active', m === 'multi');
+    const inp = document.getElementById('fileInput');
+    inp.multiple = m === 'multi';
+    document.getElementById('dropHint').textContent =
+      m === 'single' ? 'or click to browse — JPG, PNG, WEBP'
+                     : 'or click to select up to 6 images from different angles';
+    clearFiles();
+  }
+
+  // ── File Handling ─────────────────────────────────────────────────────────
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  fileInput.addEventListener('change', e => handleFiles(Array.from(e.target.files)));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    handleFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+  });
+
+  function handleFiles(files) {
+    if (uploadMode === 'single') {
+      selectedFiles = [files[0]];
+    } else {
+      selectedFiles = [...selectedFiles, ...files].slice(0, 6);
+    }
+    renderFileList();
+    showPreview();
+    document.getElementById('analyzeBtn').disabled = selectedFiles.length === 0;
+  }
+
+  const sensSlider = document.getElementById('sensSlider');
+  const sensVal    = document.getElementById('sensVal');
+  if (sensSlider) {
+    sensSlider.addEventListener('input', () => {
+      sensVal.textContent = `${sensSlider.value}%`;
+    });
+  }
+
+  document.getElementById('analyzeBtn').addEventListener('click', analyze);
+  document.getElementById('clearBtn').addEventListener('click', clearFiles);
+
+  function removeFile(idx) {
+    selectedFiles.splice(idx, 1);
+    renderFileList();
+    if (selectedFiles.length === 0) {
+      document.getElementById('analyzeBtn').disabled = true;
+      document.getElementById('previewWrap').style.display = 'none';
+    } else { showPreview(); }
+  }
+
+  function clearFiles() {
+    selectedFiles = [];
+    fileInput.value = '';
+    document.getElementById('fileList').innerHTML = '';
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('previewWrap').style.display = 'none';
+  }
+
+  function renderFileList() {
+    const el = document.getElementById('fileList');
+    el.innerHTML = selectedFiles.map((f, i) =>
+      `<div class="file-chip">
+         📷 ${f.name.length > 18 ? f.name.slice(0,16)+'…' : f.name}
+         <button onclick="removeFile(${i})">×</button>
+       </div>`
+    ).join('');
+  }
+
+  function showPreview() {
+    if (selectedFiles.length === 0) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('previewImg').src = e.target.result;
+      document.getElementById('previewWrap').style.display = 'block';
+      document.getElementById('previewLabel').textContent =
+        selectedFiles.length > 1
+          ? `Showing preview of first image. ${selectedFiles.length} images queued.`
+          : selectedFiles[0].name;
+    };
+    reader.readAsDataURL(selectedFiles[0]);
+  }
+
+  // ── Analyze ───────────────────────────────────────────────────────────────
+  async function analyze() {
+    if (selectedFiles.length === 0) return;
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Analyzing…';
+    document.getElementById('errorBox').innerHTML = '';
+
+    try {
+      const fd = new FormData();
+      let endpoint;
+
+      const sens = sensSlider.value;
+      if (uploadMode === 'single') {
+        fd.append('file', selectedFiles[0]);
+        endpoint = `${API}/v2/analyze-dent?sensitivity=${sens}`;
+      } else {
+        selectedFiles.forEach(f => fd.append('files', f));
+        endpoint = `${API}/v2/analyze-vehicle?sensitivity=${sens}`;
+      }
+
+      const res = await fetch(endpoint, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const errData = await res.json();
+        const msg = typeof errData.detail === 'string' 
+          ? errData.detail 
+          : (Array.isArray(errData.detail) ? errData.detail[0].msg : JSON.stringify(errData.detail));
+        throw new Error(msg || 'Server error');
+      }
+      const data = await res.json();
+      renderResults(data);
+    } catch (err) {
+      document.getElementById('errorBox').innerHTML =
+        `<div class="error-box">⚠️ ${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Analyze Damage';
+    }
+  }
+
+  // ── Render Results ────────────────────────────────────────────────────────
+  function renderResults(data) {
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    // Support both old API (dents[]) and new API (damages[])
+    const items = data.damages || data.dents || [];
+
+    // Stats
+    document.getElementById('statDents').textContent     = data.dents_found     ?? items.filter(d => d.damage_class === 'dent').length;
+    document.getElementById('statScratches').textContent = data.scratches_found ?? items.filter(d => d.damage_class === 'scratch').length;
+    document.getElementById('statSev').textContent       = data.overall_severity || '—';
+    document.getElementById('statCost').textContent      = data.estimated_total_cost_usd || '$0';
+    document.getElementById('sevScore').textContent      = data.severity_score != null ? `${data.severity_score} / 100` : '';
+
+    // Severity bar
+    setTimeout(() => {
+      document.getElementById('sevBar').style.width = `${data.severity_score || 0}%`;
+    }, 100);
+
+    // Annotated image
+    const b64 = data.annotated_image_base64 || (data.annotated_images_base64 && data.annotated_images_base64[0]);
+    if (b64) document.getElementById('annotatedImg').src = `data:image/jpeg;base64,${b64}`;
+
+    // Damage cards
+    const container = document.getElementById('dentCards');
+    if (items.length === 0) {
+      container.innerHTML = `<div class="no-dent">✅ No significant damage detected</div>`;
+      return;
+    }
+
+    container.innerHTML = items.map(d => {
+      const isScratch = d.damage_class === 'scratch';
+      const rec       = d.recommendation || '';
+
+      let badgeCls;
+      if (isScratch) {
+        badgeCls = 'badge-scratch';
+      } else {
+        badgeCls = rec.includes('PDR') && !rec.includes('+') ? 'badge-pdr'
+                 : rec.includes('Full') ? 'badge-full' : 'badge-std';
+      }
+
+      const icon  = isScratch ? '〰️' : '💢';
+      const label = isScratch ? `Scratch #${d.id}` : `Dent #${d.id}`;
+
+      // Deep dent row only makes sense for dents
+      const deepRow = d.deep_dent !== null && d.deep_dent !== undefined
+        ? `<div class="dent-kv"><span>Deep Dent:</span><span class="${d.deep_dent?'bool-true':'bool-false'}">${d.deep_dent?'Yes':'No'}</span></div>`
+        : `<div class="dent-kv"><span>Length:</span><span>${(d.length_px||0).toLocaleString()} px</span></div>`;
+
+      return `
+        <div class="dent-card ${isScratch ? 'scratch' : ''}">
+          <div class="dent-card-header">
+            <div>
+              <div class="dent-id">${icon} ${label}</div>
+              <div class="dent-type">${d.type || 'Unknown'}</div>
+            </div>
+            <span class="dent-badge ${badgeCls}">${rec}</span>
+          </div>
+          <div class="dent-grid">
+            <div class="dent-kv"><span>Severity:</span><span>${d.severity_score} / 100</span></div>
+            <div class="dent-kv"><span>Confidence:</span><span>${Math.round((d.confidence||0)*100)}%</span></div>
+            ${deepRow}
+            <div class="dent-kv"><span>Paint Damage:</span><span class="${d.paint_damage?'bool-true':'bool-false'}">${d.paint_damage?'Yes':'No'}</span></div>
+            ${!isScratch ? `<div class="dent-kv"><span>PDR Eligible:</span><span class="${d.pdr_eligible?'bool-false':'bool-true'}">${d.pdr_eligible?'Yes':'No'}</span></div>` : ''}
+            <div class="dent-kv"><span>Est. Cost:</span><span>${d.estimated_cost_usd}</span></div>
+            <div class="dent-kv"><span>Repair Time:</span><span>${d.repair_time_hours} hrs</span></div>
+            <div class="dent-kv"><span>Band:</span><span>${d.severity_band}</span></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+</script>
+</body>
+</html>
